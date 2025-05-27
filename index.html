@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blood Delivery Run</title>
+    <title>Blood Delivery Game</title>
     <style>
         body {
             display: flex;
@@ -39,15 +39,16 @@
     <div id="game-container">
         <canvas id="game-canvas" width="750" height="250"></canvas>
         <div id="instructions">
-            <p>Tekan SPASI untuk melompat. Jika game over, tekan SPASI untuk mulai kembali.</p>
+            <p>Tekan SPASI untuk melompat. Kumpulkan darah & antarkan ke rumah sakit!</p>
         </div>
     </div>
 
     <script>
         const canvas = document.getElementById('game-canvas');
         const ctx = canvas.getContext('2d');
-        const boardWidth = 750;
-        const boardHeight = 250;
+
+        const boardWidth = canvas.width;
+        const boardHeight = canvas.height;
 
         const dinosaurWidth = 88;
         const dinosaurHeight = 94;
@@ -56,48 +57,53 @@
 
         const cactus1Width = 34;
         const cactus2Width = 69;
-        const cactus3Width = 102;
+    
         const cactusHeight = 70;
         const cactusX = 700;
         const cactusY = boardHeight - cactusHeight;
 
-        let velocityX = -8;
-        let velocityY = 10;
+        const coneWidth = 70;
+        const coneHeight = 70;
+
+        const velocityX = -8;
+        let velocityY = 0;
         const gravity = 0.6;
 
         let gameOver = false;
         let score = 0;
         let cactusArray = [];
+        let bloodArray = [];
+
+        const bloodWidth = 50;
+        const bloodHeight = 60;
+        const bloodY = boardHeight - bloodHeight - 10;
+        let collectedBlood = 0;
+        const bloodGoal = 5;
+
+        const hospitalImg = new Image();
+        hospitalImg.src = "img/hospital.png";
+        const hospital = {
+            x: boardWidth,
+            y: boardHeight - 90,
+            width: 80,
+            height: 80
+        };
+
+        let hospitalVisible = false;
 
         let runFrame = 0;
         const runFrameCount = 2;
         let animationCounter = 0;
         const animationSpeed = 7;
 
-        // Blood
-        const bloodWidth = 50;
-        const bloodHeight = 60;
-        const bloodY = boardHeight - bloodHeight - 10;
-        let bloodArray = [];
-        let collectedBlood = 0;
-        const bloodGoal = 5;
-
-        // Hospital
-        const hospitalWidth = 100;
-        const hospitalHeight = 80;
-        const hospitalY = boardHeight - hospitalHeight;
-        let hospital = null;
-
-        // Images
         const dinosaurRun1 = new Image();
         const dinosaurRun2 = new Image();
         const dinosaurDeadImg = new Image();
         const dinosaurJumpImg = new Image();
         const cactus1Img = new Image();
         const cactus2Img = new Image();
-        const cactus3Img = new Image();
+        const cactus3Img = new Image(); // akan diganti cone
         const bloodImg = new Image();
-        const hospitalImg = new Image();
 
         dinosaurRun1.src = 'img/Ghibli Run-High.png';
         dinosaurRun2.src = 'img/Ghibli Run-Pass.png';
@@ -105,9 +111,8 @@
         dinosaurJumpImg.src = 'img/Ghibli Jump.png';
         cactus1Img.src = 'img/cactus1.png';
         cactus2Img.src = 'img/cactus2.png';
-        cactus3Img.src = 'img/cactus3.png';
-        bloodImg.src = 'img/blood.png'; // Ganti sesuai asset kamu
-        hospitalImg.src = 'img/hospital.png'; // Ganti sesuai asset kamu
+        cactus3Img.src = 'img/cone1.png'; // <-- Ganti cactus3 dengan cone
+        bloodImg.src = 'img/blood.png';
 
         const dinosaur = {
             x: dinosaurX,
@@ -118,32 +123,56 @@
             isRunning: true
         };
 
+        function collision(a, b) {
+            return (
+                a.x < b.x + b.width &&
+                a.x + a.width > b.x &&
+                a.y < b.y + b.height &&
+                a.y + a.height > b.y
+            );
+        }
+
         function placeCactus() {
             if (gameOver) return;
 
             const chance = Math.random();
-            let cactus = null;
+            let cactus;
             if (chance > 0.9) {
-                cactus = { x: cactusX, y: cactusY, width: cactus3Width, height: cactusHeight, img: cactus3Img };
+                cactus = {
+                    x: cactusX,
+                    y: boardHeight - coneHeight,
+                    width: coneWidth,
+                    height: coneHeight,
+                    img: cactus3Img
+                };
             } else if (chance > 0.7) {
-                cactus = { x: cactusX, y: cactusY, width: cactus2Width, height: cactusHeight, img: cactus2Img };
+                cactus = {
+                    x: cactusX,
+                    y: cactusY,
+                    width: cactus2Width,
+                    height: cactusHeight,
+                    img: cactus2Img
+                };
             } else if (chance > 0.5) {
-                cactus = { x: cactusX, y: cactusY, width: cactus1Width, height: cactusHeight, img: cactus1Img };
+                cactus = {
+                    x: cactusX,
+                    y: cactusY,
+                    width: cactus1Width,
+                    height: cactusHeight,
+                    img: cactus1Img
+                };
             }
 
             if (cactus) cactusArray.push(cactus);
             if (cactusArray.length > 10) cactusArray.shift();
         }
-        
+
         function placeBlood() {
             if (gameOver || collectedBlood >= bloodGoal) return;
 
-            if (Math.random() > 0.4) {
+            if (Math.random() > 0.7) {
                 const bloodX = boardWidth;
-                const tooClose = cactusArray.some(cactus =>
-                    Math.abs(cactus.x - bloodX) < 60
-                );
-
+                const tooClose = cactusArray.some(c => Math.abs(c.x - bloodX) < 60);
                 if (!tooClose) {
                     bloodArray.push({
                         x: bloodX,
@@ -158,30 +187,12 @@
             if (bloodArray.length > 10) bloodArray.shift();
         }
 
-        function spawnHospital() {
-            if (!hospital && collectedBlood >= bloodGoal) {
-                hospital = {
-                    x: boardWidth + 100,
-                    y: hospitalY,
-                    width: hospitalWidth,
-                    height: hospitalHeight,
-                    img: hospitalImg
-                };
-            }
-        }
-
-        function collision(a, b) {
-            return a.x < b.x + b.width &&
-                a.x + a.width > b.x &&
-                a.y < b.y + b.height &&
-                a.y + a.height > b.y;
-        }
-
         function update() {
             if (gameOver) return;
 
             velocityY += gravity;
             dinosaur.y += velocityY;
+
             if (dinosaur.y > dinosaurY) {
                 dinosaur.y = dinosaurY;
                 velocityY = 0;
@@ -198,30 +209,32 @@
             }
 
             for (let i = 0; i < cactusArray.length; i++) {
-                const cactus = cactusArray[i];
-                cactus.x += velocityX;
-                if (collision(dinosaur, cactus)) {
+                const c = cactusArray[i];
+                c.x += velocityX;
+                if (collision(dinosaur, c)) {
                     gameOver = true;
                     dinosaur.img = dinosaurDeadImg;
                 }
             }
 
             for (let i = 0; i < bloodArray.length; i++) {
-                const blood = bloodArray[i];
-                blood.x += velocityX;
-                if (collision(dinosaur, blood)) {
-                    bloodArray.splice(i, 1);
+                const b = bloodArray[i];
+                b.x += velocityX;
+                if (collision(dinosaur, b)) {
                     collectedBlood++;
+                    bloodArray.splice(i, 1);
                     i--;
+                    if (collectedBlood >= bloodGoal) {
+                        hospitalVisible = true;
+                        hospital.x = boardWidth;
+                    }
                 }
             }
 
-            spawnHospital();
-            if (hospital) {
+            if (hospitalVisible) {
                 hospital.x += velocityX;
                 if (collision(dinosaur, hospital)) {
                     gameOver = true;
-                    alert("Berhasil! Kamu telah mengantarkan darah ke rumah sakit!");
                 }
             }
 
@@ -230,37 +243,47 @@
 
         function draw() {
             ctx.clearRect(0, 0, boardWidth, boardHeight);
+
             ctx.drawImage(dinosaur.img, dinosaur.x, dinosaur.y, dinosaur.width, dinosaur.height);
 
-            for (let cactus of cactusArray) {
-                ctx.drawImage(cactus.img, cactus.x, cactus.y, cactus.width, cactus.height);
+            cactusArray.forEach(c =>
+                ctx.drawImage(c.img, c.x, c.y, c.width, c.height)
+            );
+
+            bloodArray.forEach(b =>
+                ctx.drawImage(b.img, b.x, b.y, b.width, b.height)
+            );
+
+            if (hospitalVisible) {
+                ctx.drawImage(hospitalImg, hospital.x, hospital.y, hospital.width, hospital.height);
             }
 
-            for (let blood of bloodArray) {
-                ctx.drawImage(blood.img, blood.x, blood.y, blood.width, blood.height);
-            }
+            ctx.fillStyle = 'black';
+            ctx.font = '24px Courier';
+            ctx.fillText("Score: " + score, 10, 25);
+            ctx.fillText("Blood: " + collectedBlood + "/" + bloodGoal, 10, 50);
 
-            if (hospital) {
-                ctx.drawImage(hospital.img, hospital.x, hospital.y, hospital.width, hospital.height);
+            if (gameOver) {
+                const msg = (collectedBlood >= bloodGoal && collision(dinosaur, hospital))
+                    ? "Berhasil mengantar darah!"
+                    : "Game Over!";
+                ctx.fillText(msg, 10, 80);
             }
-
-            ctx.fillStyle = "black";
-            ctx.font = "32px Courier";
-            ctx.fillText(gameOver ? "Game Over: " + score : score, 10, 35);
-            ctx.fillText("Darah: " + collectedBlood + "/" + bloodGoal, 10, 70);
         }
 
         function gameLoop() {
             update();
             draw();
-            if (!gameOver) requestAnimationFrame(gameLoop);
+            if (!gameOver) {
+                requestAnimationFrame(gameLoop);
+            }
         }
 
-        let placeCactusInterval = setInterval(placeCactus, 500);
-        let placeBloodInterval = setInterval(placeBlood, 1000);
+        let cactusInterval = setInterval(placeCactus, 800);
+        let bloodInterval = setInterval(placeBlood, 1000);
 
-        document.addEventListener("keydown", function (event) {
-            if (event.code === "Space") {
+        document.addEventListener('keydown', function (e) {
+            if (e.code === 'Space') {
                 if (dinosaur.y === dinosaurY) {
                     velocityY = -14;
                     dinosaur.img = dinosaurJumpImg;
@@ -274,16 +297,16 @@
                     velocityY = 0;
                     cactusArray = [];
                     bloodArray = [];
-                    collectedBlood = 0;
                     score = 0;
-                    hospital = null;
+                    collectedBlood = 0;
                     gameOver = false;
+                    hospitalVisible = false;
+                    hospital.x = boardWidth;
 
-                    clearInterval(placeCactusInterval);
-                    clearInterval(placeBloodInterval);
-                    placeCactusInterval = setInterval(placeCactus, 500);
-                    placeBloodInterval = setInterval(placeBlood, 1000);
-
+                    clearInterval(cactusInterval);
+                    clearInterval(bloodInterval);
+                    cactusInterval = setInterval(placeCactus, 800);
+                    bloodInterval = setInterval(placeBlood, 1000);
                     requestAnimationFrame(gameLoop);
                 }
             }
