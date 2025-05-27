@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chrome Dinosaur Game</title>
+    <title>Blood Delivery Run</title>
     <style>
         body {
             display: flex;
@@ -14,18 +15,18 @@
             background-color: #f0f0f0;
             font-family: Arial, sans-serif;
         }
-        
+
         #game-container {
             display: flex;
             flex-direction: column;
             align-items: center;
         }
-        
+
         #game-canvas {
             background-color: #fff;
             border: 1px solid #ccc;
         }
-        
+
         #instructions {
             margin-top: 20px;
             text-align: center;
@@ -33,6 +34,7 @@
         }
     </style>
 </head>
+
 <body>
     <div id="game-container">
         <canvas id="game-canvas" width="750" height="250"></canvas>
@@ -42,41 +44,49 @@
     </div>
 
     <script>
-        // Game variables
         const canvas = document.getElementById('game-canvas');
         const ctx = canvas.getContext('2d');
         const boardWidth = 750;
         const boardHeight = 250;
 
-        // Dinosaur properties
         const dinosaurWidth = 88;
         const dinosaurHeight = 94;
         const dinosaurX = 50;
         let dinosaurY = boardHeight - dinosaurHeight;
 
-        // Cactus properties
         const cactus1Width = 34;
         const cactus2Width = 69;
         const cactus3Width = 102;
         const cactusHeight = 70;
         const cactusX = 700;
         const cactusY = boardHeight - cactusHeight;
-        
-        // Physics
-        let velocityX = -8;  // Cactus moving left speed (slowed down from -12)
-        let velocityY = 10;    // Dinosaur jump speed
-        const gravity = 0.6;  // Reduced gravity for slower falling
 
-        // Game state
+        let velocityX = -8;
+        let velocityY = 10;
+        const gravity = 0.6;
+
         let gameOver = false;
         let score = 0;
         let cactusArray = [];
-        
-        // Animation
+
         let runFrame = 0;
-        const runFrameCount = 2; // Jumlah frame untuk animasi berlari
+        const runFrameCount = 2;
         let animationCounter = 0;
-        const animationSpeed = 7; // Semakin kecil, semakin cepat
+        const animationSpeed = 7;
+
+        // Blood
+        const bloodWidth = 30;
+        const bloodHeight = 40;
+        const bloodY = boardHeight - bloodHeight - 10;
+        let bloodArray = [];
+        let collectedBlood = 0;
+        const bloodGoal = 5;
+
+        // Hospital
+        const hospitalWidth = 100;
+        const hospitalHeight = 80;
+        const hospitalY = boardHeight - hospitalHeight;
+        let hospital = null;
 
         // Images
         const dinosaurRun1 = new Image();
@@ -86,95 +96,98 @@
         const cactus1Img = new Image();
         const cactus2Img = new Image();
         const cactus3Img = new Image();
+        const bloodImg = new Image();
+        const hospitalImg = new Image();
 
-        // Load images
-        dinosaurRun1.src = 'img/Ghibli Run-High.png'; // Frame 1 dari sprite sheet
-        dinosaurRun2.src = 'img/Ghibli Run-Pass.png'; // Frame 2 dari sprite sheet
+        dinosaurRun1.src = 'img/Ghibli Run-High.png';
+        dinosaurRun2.src = 'img/Ghibli Run-Pass.png';
         dinosaurDeadImg.src = 'img/ghibli dead.png';
         dinosaurJumpImg.src = 'img/Ghibli Jump.png';
         cactus1Img.src = 'img/cactus1.png';
         cactus2Img.src = 'img/cactus2.png';
         cactus3Img.src = 'img/cactus3.png';
+        bloodImg.src = 'img/blood.png'; // Ganti sesuai asset kamu
+        hospitalImg.src = 'img/hospital.png'; // Ganti sesuai asset kamu
 
-        // Create dinosaur object
         const dinosaur = {
             x: dinosaurX,
             y: dinosaurY,
             width: dinosaurWidth,
             height: dinosaurHeight,
-            img: dinosaurRun1, // Default ke frame pertama
+            img: dinosaurRun1,
             isRunning: true
         };
 
-        // Function to place cactus
         function placeCactus() {
-            if (gameOver) {
-                return;
+            if (gameOver) return;
+
+            const chance = Math.random();
+            let cactus = null;
+            if (chance > 0.9) {
+                cactus = { x: cactusX, y: cactusY, width: cactus3Width, height: cactusHeight, img: cactus3Img };
+            } else if (chance > 0.7) {
+                cactus = { x: cactusX, y: cactusY, width: cactus2Width, height: cactusHeight, img: cactus2Img };
+            } else if (chance > 0.5) {
+                cactus = { x: cactusX, y: cactusY, width: cactus1Width, height: cactusHeight, img: cactus1Img };
             }
 
-            const placeCactusChance = Math.random(); // 0 - 0.999999
-            
-            if (placeCactusChance > 0.90) { // 10% chance for cactus3
-                const cactus = {
-                    x: cactusX,
-                    y: cactusY,
-                    width: cactus3Width,
-                    height: cactusHeight,
-                    img: cactus3Img
-                };
-                cactusArray.push(cactus);
-            }
-            else if (placeCactusChance > 0.70) { // 20% chance for cactus2
-                const cactus = {
-                    x: cactusX,
-                    y: cactusY,
-                    width: cactus2Width,
-                    height: cactusHeight,
-                    img: cactus2Img
-                };
-                cactusArray.push(cactus);
-            }
-            else if (placeCactusChance > 0.50) { // 20% chance for cactus1
-                const cactus = {
-                    x: cactusX,
-                    y: cactusY,
-                    width: cactus1Width,
-                    height: cactusHeight,
-                    img: cactus1Img
-                };
-                cactusArray.push(cactus);
+            if (cactus) cactusArray.push(cactus);
+            if (cactusArray.length > 10) cactusArray.shift();
+        }
+        
+        function placeBlood() {
+            if (gameOver || collectedBlood >= bloodGoal) return;
+
+            if (Math.random() > 0.4) {
+                const bloodX = boardWidth;
+                const tooClose = cactusArray.some(cactus =>
+                    Math.abs(cactus.x - bloodX) < 60
+                );
+
+                if (!tooClose) {
+                    bloodArray.push({
+                        x: bloodX,
+                        y: bloodY,
+                        width: bloodWidth,
+                        height: bloodHeight,
+                        img: bloodImg
+                    });
+                }
             }
 
-            if (cactusArray.length > 10) {
-                cactusArray.shift(); // Remove the first cactus from array
+            if (bloodArray.length > 10) bloodArray.shift();
+        }
+
+        function spawnHospital() {
+            if (!hospital && collectedBlood >= bloodGoal) {
+                hospital = {
+                    x: boardWidth + 100,
+                    y: hospitalY,
+                    width: hospitalWidth,
+                    height: hospitalHeight,
+                    img: hospitalImg
+                };
             }
         }
 
-        // Function to check collision
         function collision(a, b) {
-            return a.x < b.x + b.width &&   // a's top left corner doesn't reach b's top right corner
-                   a.x + a.width > b.x &&   // a's top right corner passes b's top left corner
-                   a.y < b.y + b.height &&  // a's top left corner doesn't reach b's bottom left corner
-                   a.y + a.height > b.y;    // a's bottom left corner passes b's top left corner
+            return a.x < b.x + b.width &&
+                a.x + a.width > b.x &&
+                a.y < b.y + b.height &&
+                a.y + a.height > b.y;
         }
 
-        // Function to update game state
         function update() {
-            if (gameOver) {
-                return;
-            }
+            if (gameOver) return;
 
-            // Update dinosaur position
             velocityY += gravity;
             dinosaur.y += velocityY;
-
-            if (dinosaur.y > dinosaurY) { // Stop the dinosaur from falling past the ground
+            if (dinosaur.y > dinosaurY) {
                 dinosaur.y = dinosaurY;
                 velocityY = 0;
-                dinosaur.isRunning = true; // Set to running state when landing
+                dinosaur.isRunning = true;
             }
 
-            // Animate running dinosaur
             if (dinosaur.isRunning) {
                 animationCounter++;
                 if (animationCounter >= animationSpeed) {
@@ -184,89 +197,100 @@
                 }
             }
 
-            // Update cactus positions and check collisions
             for (let i = 0; i < cactusArray.length; i++) {
                 const cactus = cactusArray[i];
                 cactus.x += velocityX;
-
                 if (collision(dinosaur, cactus)) {
                     gameOver = true;
                     dinosaur.img = dinosaurDeadImg;
                 }
             }
 
-            // Update score
+            for (let i = 0; i < bloodArray.length; i++) {
+                const blood = bloodArray[i];
+                blood.x += velocityX;
+                if (collision(dinosaur, blood)) {
+                    bloodArray.splice(i, 1);
+                    collectedBlood++;
+                    i--;
+                }
+            }
+
+            spawnHospital();
+            if (hospital) {
+                hospital.x += velocityX;
+                if (collision(dinosaur, hospital)) {
+                    gameOver = true;
+                    alert("Berhasil! Kamu telah mengantarkan darah ke rumah sakit!");
+                }
+            }
+
             score++;
         }
 
-        // Function to draw game
         function draw() {
-            // Clear canvas
             ctx.clearRect(0, 0, boardWidth, boardHeight);
-            
-            // Draw dinosaur
             ctx.drawImage(dinosaur.img, dinosaur.x, dinosaur.y, dinosaur.width, dinosaur.height);
 
-            // Draw cactus
-            for (let i = 0; i < cactusArray.length; i++) {
-                const cactus = cactusArray[i];
+            for (let cactus of cactusArray) {
                 ctx.drawImage(cactus.img, cactus.x, cactus.y, cactus.width, cactus.height);
             }
 
-            // Draw score
+            for (let blood of bloodArray) {
+                ctx.drawImage(blood.img, blood.x, blood.y, blood.width, blood.height);
+            }
+
+            if (hospital) {
+                ctx.drawImage(hospital.img, hospital.x, hospital.y, hospital.width, hospital.height);
+            }
+
             ctx.fillStyle = "black";
             ctx.font = "32px Courier";
-            if (gameOver) {
-                ctx.fillText("Game Over: " + score, 10, 35);
-            } else {
-                ctx.fillText(score, 10, 35);
-            }
+            ctx.fillText(gameOver ? "Game Over: " + score : score, 10, 35);
+            ctx.fillText("Darah: " + collectedBlood + "/" + bloodGoal, 10, 70);
         }
 
-        // Game loop
         function gameLoop() {
             update();
             draw();
-            if (!gameOver) {
-                requestAnimationFrame(gameLoop);
-            }
+            if (!gameOver) requestAnimationFrame(gameLoop);
         }
 
-        // Start placing cactus at intervals
-        let placeCactusInterval = setInterval(placeCactus, 500); // Increased from 1500ms to 2000ms
+        let placeCactusInterval = setInterval(placeCactus, 500);
+        let placeBloodInterval = setInterval(placeBlood, 1000);
 
-        // Handle keyboard input
-        document.addEventListener("keydown", function(event) {
+        document.addEventListener("keydown", function (event) {
             if (event.code === "Space") {
-                // System.out.println("JUMP!");
                 if (dinosaur.y === dinosaurY) {
-                    velocityY = -14; // Reduced from -17 for slower jump
+                    velocityY = -14;
                     dinosaur.img = dinosaurJumpImg;
-                    dinosaur.isRunning = false; // Stop running animation during jump
+                    dinosaur.isRunning = false;
                 }
-                
+
                 if (gameOver) {
-                    //restart game by resetting conditions
                     dinosaur.y = dinosaurY;
                     dinosaur.img = dinosaurRun1;
                     dinosaur.isRunning = true;
                     velocityY = 0;
                     cactusArray = [];
+                    bloodArray = [];
+                    collectedBlood = 0;
                     score = 0;
+                    hospital = null;
                     gameOver = false;
-                    
-                    // Restart intervals
+
                     clearInterval(placeCactusInterval);
-                    placeCactusInterval = setInterval(placeCactus, 500); // Use the same 2000ms interval
-                    
-                    // Restart game loop
+                    clearInterval(placeBloodInterval);
+                    placeCactusInterval = setInterval(placeCactus, 500);
+                    placeBloodInterval = setInterval(placeBlood, 1000);
+
                     requestAnimationFrame(gameLoop);
                 }
             }
         });
 
-        // Start the game
         gameLoop();
     </script>
 </body>
+
 </html>
